@@ -5,9 +5,9 @@ contributions:
     - id: napari-event-annotate.make_sample_data
       python_name: napari_event_annotate._sample_data:make_sample_data
       title: Load sample data from Event Annotate
-    - id: napari-event-annotate.make_qwidget
-      python_name: napari_event_annotate._widget:ExampleQWidget
-      title: Make example QWidget
+    - id: napari-event-annotate.Editor_Widget
+      python_name: napari_event_annotate._widget:Editor_Widget
+      title: Editor Widget
     - id: napari-event-annotate.make_magic_widget
       python_name: napari_event_annotate._widget:example_magic_widget
       title: Make example magic widget
@@ -19,8 +19,8 @@ contributions:
       display_name: Event Annotate
       key: unique_id.1
   widgets:
-    - command: napari-event-annotate.make_qwidget
-      display_name: Example QWidget
+    - command: napari-event-annotate.Editor_Widget
+      display_name: Editor
     - command: napari-event-annotate.make_magic_widget
       display_name: Example Magic Widget
     - command: napari-event-annotate.make_func_widget
