@@ -1,21 +1,16 @@
 """
-This module is an example of a barebones QWidget plugin for napari
-
-It implements the Widget specification.
-see: https://napari.org/stable/plugins/guides.html?#widgets
-
-Replace code below according to your needs.
+Widgets for the napari_event_annotate plugin. The editor widget allow to modify events in form
+of gaussian blobs.
 """
 from typing import TYPE_CHECKING
 
-from magicgui import magic_factory
 from qtpy import QtWidgets, QtCore
 import tifffile
 import numpy as np
 from queue import Queue
 from scipy.stats import multivariate_normal
 import time
-
+import napari
 if TYPE_CHECKING:
     import napari
 
@@ -23,7 +18,6 @@ if TYPE_CHECKING:
 
 class Editor_Widget(QtWidgets.QWidget):
     """This doct widget is an editor in which, given the layer of previously predicted events, it can edit (add/delete) events
-
     Parameters
     ----------
 
@@ -83,19 +77,15 @@ class Editor_Widget(QtWidgets.QWidget):
             """Distiguishes between a click and a drag. Click if below a certain time (80 ms)"""
             if event.type == 'mouse_press':
                 self.click_time = time.perf_counter()
-                print('mouse down')
                 dragged = False
                 yield
             # on move
             while event.type == 'mouse_move':
                 drag_time = time.perf_counter() - self.click_time
-                print(drag_time)
                 if drag_time > 0.08:
                     dragged = True
                 yield
-            if dragged:
-                print('drag end')
-            else:
+            if not dragged:
                 print('clicked!')
                 self.get_coordinates(event.position)
 
@@ -265,11 +255,11 @@ class Editor_Widget(QtWidgets.QWidget):
             # print("PIXEL COORDS", pixel_coords)
             int_val = self.eda_layer.data[pixel_coords[0],pixel_coords[1],pixel_coords[2]]
             if  int_val < 0.1:
+                # Add Gaussian
                 xmax= int(np.ceil(pixel_coords[2]+(size/2)))
                 xmin= int(np.floor(pixel_coords[2]-(size/2)))
                 ymax= int(np.ceil(pixel_coords[1]+(size/2)))
                 ymin= int(np.floor(pixel_coords[1]-(size/2)))
-                print('Intensity Value is', int_val)
                 self.eda_layer.data[frame_num, ymin:ymax, xmin:xmax] = self.eda_layer.data[frame_num, ymin:ymax, xmin:xmax] + self.add_gauss(size, offset)
                 self.undo_score=self.undo_score+1
                 if self.undo_score==10:
@@ -277,7 +267,7 @@ class Editor_Widget(QtWidgets.QWidget):
                         self.undo_arr[i-1]=self.undo_arr[i]
                     self.undo_score=9
             else:
-                print('Intensity Value is', int_val)
+                #Remove intensity
                 mu = [round(x) for x in mu]
                 self.eda_layer.data = self.remove_int(mu,frame_num)
                 self.undo_score=self.undo_score+1
@@ -319,6 +309,116 @@ class Editor_Widget(QtWidgets.QWidget):
         if len(self._viewer.layers) < 2:
             self.timer.start(self.Twait) #restarts the timer with a timeout of Twait ms
 
+
+class Cropper_Widget(QtWidgets.QWidget):
+    def __init__(self, napari_viewer):
+        super().__init__()
+
+        self._viewer: napari.Viewer = napari_viewer
+        self.editting = False
+        self.started = False
+        self._images = self._viewer.add_image(np.zeros((100,500,500)), name='images')
+        self._shape_layer = self._viewer.add_shapes()
+        self.setLayout(QtWidgets.QVBoxLayout())
+        self.make_gui()
+        @self._viewer.mouse_drag_callbacks.append
+        def get_event(viewer, event):
+            """Distiguishes between a click and a drag"""
+            if event.type == 'mouse_press':
+                dragged = False
+                yield
+            while event.type == 'mouse_move':
+                dragged = True
+                yield
+            if not dragged:
+                self.mouse_press(event)
+
+    def make_gui(self):
+        """Add a inpout box for integers to define the size of the crop and two buttons. One button
+        to start the editting, the other one to do the crop."""
+        self.crop_size = QtWidgets.QLineEdit("256")
+        self.crop_size_label = QtWidgets.QLabel("Crop size")
+        # A button that stays in the same state
+        self.start_edit = QtWidgets.QPushButton("Edit")
+        self.start_edit.setCheckable(True)
+        self.do_crop = QtWidgets.QPushButton("Crop")
+        self.layout().addWidget(self.crop_size_label)
+        self.layout().addWidget(self.crop_size)
+        self.layout().addWidget(self.start_edit)
+        self.layout().addWidget(self.do_crop)
+        #Connect functions
+        self.start_edit.clicked.connect(self.start_editting)
+        self.do_crop.clicked.connect(self.crop)
+
+    def start_editting(self, event):
+        self.editting = event
+        if event:
+            self.start_edit.setText("Stop Editting")
+        else:
+            self.start_edit.setText("Edit")
+
+
+    def mouse_press(self, event):
+        """If first click, add a square to all images later in the time series. If second click, end
+        square at given frame."""
+        if not self.editting or event.button != 1:
+            return
+        if self.crop_size.text() == "":
+            #open a pyqt popup to tell the user to enter a crop size
+            return
+
+        print("click started", self.started)
+        if not self.started:
+            self._shape_layer.data = []
+            self.add_rectangles(event)
+            self.started = True
+        else:
+            self.remove_additional_rectangles(event)
+            self.started = False
+        self._shape_layer.refresh()
+
+    def remove_additional_rectangles(self, event):
+        start_frame = int(self._shape_layer.data[0][0][0])
+        self._shape_layer.data = self._shape_layer.data[:int(event.position[0]) - start_frame + 1]
+
+    def add_rectangles(self, event):
+        crop_size = int(self.crop_size.text())
+        index_x
+
+        rectangle = [[event.position[1] - crop_size/2, event.position[2] - crop_size/2],
+                    [ event.position[1] - crop_size/2, event.position[2] + crop_size/2],
+                    [event.position[1] + crop_size/2, event.position[2] + crop_size/2],
+                    [event.position[1] + crop_size/2, event.position[2] - crop_size/2]]
+        rectangles = np.array([rectangle for i in range(int(event.position[0]),
+                                                        self._images.data.shape[0])])
+        planes = np.arange(event.position[0], self._images.data.shape[0])
+        planes = np.vstack([planes for i in range(4)]).T.reshape(-1, 4)
+        planes = np.expand_dims(planes, axis=2)
+        shapes = np.concatenate((planes, rectangles), axis=2)
+        rectangle = self._shape_layer.add(shapes,
+                                          shape_type='polygon',
+                                          face_color=[0, 0, 0, 0],
+                                          edge_color='red')
+
+    def crop(self):
+        """Crop chosen layer to the rectangle and open a new viewer with the editor widget loaded."""
+        images = []
+        for layer in self._viewer.layers:
+            if isinstance(layer, napari.layers.Image):
+                cropped_images = self.crop_layer(self._images)
+                images.append(cropped_images)
+
+        viewer = napari.Viewer()
+        for image in images:
+            viewer.add_image(image)
+        viewer.window.add_dock_widget(Editor_Widget(viewer))
+
+    def crop_layer(self, layer):
+
+        cropped_images = layer.data[int(self._shape_layer.data[0][0][0]):int(self._shape_layer.data[-1][0][0]),
+                                    int(self._shape_layer.data[0][0][1]):int(self._shape_layer.data[0][3][1]),
+                                    int(self._shape_layer.data[0][0][2]):int(self._shape_layer.data[0][2][2])]
+        return cropped_images
 
 
 def flood_fill(img, seed):

@@ -9,6 +9,6 @@ viewer = napari.Viewer()
 #savepath = str(os.path.dirname(__file__))+'/images/steven_192.ome.zarr/Reels/a.eda'
 #path= str(os.path.dirname(__file__))+'/images/example_image.tif'
 #viewer.open(path, plugin='aicsimageio-in-memory')#, plugin = 'napari-ome-zarr')
-viewer.window.add_plugin_dock_widget('napari-event-annotate','Editor') #'Add time scroller'
+viewer.window.add_plugin_dock_widget('napari-event-annotate','Cropper') #'Add time scroller'
 #viewer.layers.save(savepath, plugin='napari-eda-highlight-reel')
 napari.run()

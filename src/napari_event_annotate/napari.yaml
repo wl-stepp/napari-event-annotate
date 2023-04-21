@@ -2,18 +2,12 @@ name: napari-event-annotate
 display_name: Event Annotate
 contributions:
   commands:
-    - id: napari-event-annotate.make_sample_data
-      python_name: napari_event_annotate._sample_data:make_sample_data
-      title: Load sample data from Event Annotate
     - id: napari-event-annotate.Editor_Widget
       python_name: napari_event_annotate._widget:Editor_Widget
       title: Editor Widget
-    - id: napari-event-annotate.make_magic_widget
-      python_name: napari_event_annotate._widget:example_magic_widget
-      title: Make example magic widget
-    - id: napari-event-annotate.make_func_widget
-      python_name: napari_event_annotate._widget:example_function_widget
-      title: Make example function widget
+    - id: napari-event-annotate.Cropper_Widget
+      python_name: napari_event_annotate._widget:Cropper_Widget
+      title: Cropper Widget
   sample_data:
     - command: napari-event-annotate.make_sample_data
       display_name: Event Annotate
@@ -21,8 +15,5 @@ contributions:
   widgets:
     - command: napari-event-annotate.Editor_Widget
       display_name: Editor
-    - command: napari-event-annotate.make_magic_widget
-      display_name: Example Magic Widget
-    - command: napari-event-annotate.make_func_widget
-      autogenerate: true
-      display_name: Example Function Widget
+    - command: napari-event-annotate.Cropper_Widget
+      display_name: Cropper
