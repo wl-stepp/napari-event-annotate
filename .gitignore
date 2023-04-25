@@ -85,3 +85,4 @@ venv/
 
 
 .env/
+test_data/

@@ -11,6 +11,12 @@ from queue import Queue
 from scipy.stats import multivariate_normal
 import time
 import napari
+import os
+from deep_events.database import prepare_yaml
+from deep_events.gaussians_to_training import handle_db
+from pathlib import Path
+from benedict import benedict
+import copy
 if TYPE_CHECKING:
     import napari
 
@@ -24,16 +30,18 @@ class Editor_Widget(QtWidgets.QWidget):
     napari_viewer : napari.Viewer
         the viewer that the editor will edit the events from
     """
-    def __init__(self, napari_viewer, nbh_size = 10):
+    def __init__(self, napari_viewer):
         super().__init__()
+        self.settings = QtCore.QSettings("Event-Annotate", self.__class__.__name__)
+
         self._viewer: napari.Viewer = napari_viewer
         self.setLayout(QtWidgets.QVBoxLayout())
-        self.nbh_size = nbh_size
         self.time_data = None
         self.image_path = None
 
         self.eda_layer = None
         self.eda_ready = False
+        self.event = None
         self.on_off_score = 0
         self.undo_score = 0
         self.undo_arr = np.zeros((10,2048,2048))
@@ -91,7 +99,7 @@ class Editor_Widget(QtWidgets.QWidget):
 
     # Functions for the GUI creation
     def hideEvent(self, event):
-        self._viewer: napari.Viewer = None
+        self.settings.setValue("event_folder", self.save_folder.text())
         self.nbh_size = None
         self.time_data = None
         self.image_path = None
@@ -102,7 +110,6 @@ class Editor_Widget(QtWidgets.QWidget):
         self.undo_score = 0
         event.accept()
         print('Editor Widget is closed now')
-
 
     def create_EDA_layer_selector(self):
         """Creates the selector for the EDA layer"""
@@ -137,9 +144,25 @@ class Editor_Widget(QtWidgets.QWidget):
         self.undo_btn.clicked.connect(self.undo)
 
     def create_bottom_buttons(self):
+        # Add a multiple choice for the event type and add a couple of choices
+        self.event_type = QtWidgets.QComboBox()
+        self.event_type.addItem("None")
+        self.event_type.addItem("Division")
+        self.event_type.addItem("Fusion")
+
+        # Add a edit field to put a folder for where to save the event
+        self.save_folder = QtWidgets.QLineEdit(self.settings.value("event_folder", "Event Folder"))
+        # Make the folder save to the user profile and restore on next startup
+
+
+        self.save_event = QtWidgets.QPushButton('Save Event')
         self.save_all_btn = QtWidgets.QPushButton('Save Image')
-        self.bottom_btn_layout = QtWidgets.QHBoxLayout()
+        self.bottom_btn_layout = QtWidgets.QVBoxLayout()
+        self.bottom_btn_layout.addWidget(self.event_type)
+        self.bottom_btn_layout.addWidget(self.save_folder)
+        self.bottom_btn_layout.addWidget(self.save_event)
         self.bottom_btn_layout.addWidget(self.save_all_btn)
+        self.save_event.clicked.connect(self.save_event_clb)
         self.save_all_btn.clicked.connect(self.save_all_events)
 
     ##### BUTTON HAS ON-OFF STATES WITH DIFFERENT ON_OFF_SCORE #####
@@ -167,6 +190,8 @@ class Editor_Widget(QtWidgets.QWidget):
     ##### EDA LAYER: IF LAYER IS ADDED OR REMOVED ---> CHOOSER OPTIONS UPDATE #####
     def update_eda_layer_chooser(self):
         self.eda_layer_chooser.clear()
+        if not self._viewer:
+            return
         for lay in self._viewer.layers:
             self.eda_layer_chooser.addItem(lay.name)
 
@@ -195,6 +220,21 @@ class Editor_Widget(QtWidgets.QWidget):
             directory = r'C:\Users\roumba\Documents\Software\deep-events'
             savepath = directory + f'\{currname}'
             tifffile.imwrite(savepath, (data).astype(np.uint64), photometric='minisblack')
+
+    def save_event_clb(self):
+        event_dict = self.event.event_dict
+        event_dict['label_file'] = os.path.basename("ground_truth.tif")
+        event_dict['event_content'] = self.event_type.currentText().lower()
+        handle_db(self.event, self.event.box, event_dict, self.save_folder.text())
+        tifffile.imwrite(Path(event_dict['event_path']) / "ground_truth.tif",
+                            self._viewer.layers["NN Images"].data.astype(np.float16),
+                            photometric='minisblack')
+        for layer in self._viewer.layers:
+            if not isinstance(layer, napari.layers.Image)or layer.name == "NN Images":
+                continue
+            tifffile.imwrite(Path(event_dict['event_path']) / "images.tif",
+                             layer.data.astype(np.float16), photometric='minisblack')
+
 
 
     def get_gaussian(self, sigma, sz, offset):
@@ -306,6 +346,8 @@ class Editor_Widget(QtWidgets.QWidget):
                 print('Dock already deleted')
 
     def init_after_timer(self): ##wooow directly put in connect
+        if not self._viewer:
+            return
         if len(self._viewer.layers) < 2:
             self.timer.start(self.Twait) #restarts the timer with a timeout of Twait ms
 
@@ -317,10 +359,14 @@ class Cropper_Widget(QtWidgets.QWidget):
         self._viewer: napari.Viewer = napari_viewer
         self.editting = False
         self.started = False
-        self._images = self._viewer.add_image(np.zeros((100,500,500)), name='images')
+        self.folder_dict = None
+        self._images = None
         self._shape_layer = self._viewer.add_shapes()
         self.setLayout(QtWidgets.QVBoxLayout())
         self.make_gui()
+
+        self._viewer.layers.events.inserted.connect(self.update_image_layer)
+
         @self._viewer.mouse_drag_callbacks.append
         def get_event(viewer, event):
             """Distiguishes between a click and a drag"""
@@ -332,6 +378,23 @@ class Cropper_Widget(QtWidgets.QWidget):
                 yield
             if not dragged:
                 self.mouse_press(event)
+
+    def update_image_layer(self, event):
+        "Update self._images with the new layer, if the layer is an image."
+        if not isinstance(event.value, napari.layers.Image):
+            return
+        self._images = event.value
+        self._images.scale = (1,1,1)
+        origin = 0
+        for idx, layer in enumerate(self._viewer.layers):
+            origin = idx if layer.name == "Shapes" else origin
+        self._viewer.layers.move(origin, -1)
+        path = Path(os.path.abspath(self._images.source.path))
+        try:
+            self.folder_dict = benedict(path.parents[0] / "db.yaml")
+        except (OSError, ValueError) as e:
+            prepare_yaml.prepare_all_folder(path.parents[0])
+            self.folder_dict = benedict(path.parents[0] / "db.yaml")
 
     def make_gui(self):
         """Add a inpout box for integers to define the size of the crop and two buttons. One button
@@ -383,12 +446,15 @@ class Cropper_Widget(QtWidgets.QWidget):
 
     def add_rectangles(self, event):
         crop_size = int(self.crop_size.text())
-        index_x
-
-        rectangle = [[event.position[1] - crop_size/2, event.position[2] - crop_size/2],
-                    [ event.position[1] - crop_size/2, event.position[2] + crop_size/2],
-                    [event.position[1] + crop_size/2, event.position[2] + crop_size/2],
-                    [event.position[1] + crop_size/2, event.position[2] - crop_size/2]]
+        index_x = max([0, event.position[1] - crop_size/2])
+        index_x = index_x if index_x + crop_size < self._images.data.shape[1] else self._images.data.shape[1] - crop_size
+        print(index_x + crop_size)
+        index_y = max([0, event.position[2] - crop_size/2])
+        index_y = index_y if index_y + crop_size < self._images.data.shape[2] else self._images.data.shape[2] - crop_size
+        rectangle = [[index_x, index_y],
+                     [index_x, index_y + crop_size],
+                     [index_x + crop_size, index_y + crop_size],
+                     [index_x + crop_size, index_y]]
         rectangles = np.array([rectangle for i in range(int(event.position[0]),
                                                         self._images.data.shape[0])])
         planes = np.arange(event.position[0], self._images.data.shape[0])
@@ -405,20 +471,42 @@ class Cropper_Widget(QtWidgets.QWidget):
         images = []
         for layer in self._viewer.layers:
             if isinstance(layer, napari.layers.Image):
-                cropped_images = self.crop_layer(self._images)
+                cropped_images, box = self.crop_layer(layer)
                 images.append(cropped_images)
+
+        class Event():
+            first_frame: int = 0
+            last_frame: int = 0
+
+        event_dict = copy.deepcopy(self.folder_dict)
+        event_dict['type'] = "event"
+        # event_dict['channel_contrast'] = channel_contrast
+        # if channel_contrast is not None:
+        #     event_dict['contrast'] = channel_contrast
+        event_dict['original_file'] = os.path.basename(self._images.source.path)
+        event = Event()
+        event.first_frame = self._shape_layer.data[0][0][0]
+        event.last_frame = self._shape_layer.data[-1][0][0]
+        event.box = box
+        event.event_dict = event_dict
 
         viewer = napari.Viewer()
         for image in images:
             viewer.add_image(image)
-        viewer.window.add_dock_widget(Editor_Widget(viewer))
+        editor = Editor_Widget(viewer)
+        editor.event = event
+        viewer.window.add_dock_widget(editor, area='right')
+        viewer.dims.set_point(0,0)
+        editor.edit_btn.click()
 
     def crop_layer(self, layer):
 
+        box = [int(self._shape_layer.data[0][0][2]), int(self._shape_layer.data[0][0][1]),
+               int(self._shape_layer.data[0][2][2]), int(self._shape_layer.data[0][3][1])]
         cropped_images = layer.data[int(self._shape_layer.data[0][0][0]):int(self._shape_layer.data[-1][0][0]),
-                                    int(self._shape_layer.data[0][0][1]):int(self._shape_layer.data[0][3][1]),
-                                    int(self._shape_layer.data[0][0][2]):int(self._shape_layer.data[0][2][2])]
-        return cropped_images
+                                    box[1]:box[3],
+                                    box[0]:box[2]]
+        return cropped_images, box
 
 
 def flood_fill(img, seed):
