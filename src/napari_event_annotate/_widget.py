@@ -30,7 +30,7 @@ class Editor_Widget(QtWidgets.QWidget):
     napari_viewer : napari.Viewer
         the viewer that the editor will edit the events from
     """
-    def __init__(self, napari_viewer):
+    def __init__(self, napari_viewer, init_data = True):
         super().__init__()
         self.settings = QtCore.QSettings("Event-Annotate", self.__class__.__name__)
 
@@ -62,14 +62,15 @@ class Editor_Widget(QtWidgets.QWidget):
         self.layout().addWidget(self.event_list)
         self.layout().addLayout(self.bottom_btn_layout)
 
-        if len(self._viewer.layers) > 0:
-            self.init_data()
 
-        self.Twait = 2500
-        self.timer = QtCore.QTimer()
-        self.timer.setInterval(self.Twait)
-        self.timer.setSingleShot(True)
-        self.timer.timeout.connect(self.init_data)
+        if init_data:
+            if len(self._viewer.layers) > 0:
+                self.init_data()
+            self.Twait = 2500
+            self.timer = QtCore.QTimer()
+            self.timer.setInterval(self.Twait)
+            self.timer.setSingleShot(True)
+            self.timer.timeout.connect(self.init_data)
 
       #events
         self._viewer.layers.events.inserted.connect(self.init_after_timer)
@@ -184,6 +185,7 @@ class Editor_Widget(QtWidgets.QWidget):
             text = self.eda_layer_chooser.currentText()
         if text != '':
             self.eda_layer = self._viewer.layers[text]
+            self.undo_arr = np.zeros_like(self.eda_layer.data)
             self.size_slider.setValue(5)
             self.eda_ready = True
 
@@ -365,6 +367,15 @@ class Cropper_Widget(QtWidgets.QWidget):
         self.setLayout(QtWidgets.QVBoxLayout())
         self.make_gui()
 
+        if self._viewer.layers:
+            for layer in self._viewer.layers:
+                if isinstance(layer, napari.layers.Image):
+                    class Event():
+                        value: napari.layers.Image
+                    event = Event()
+                    event.value = layer
+                    self.update_image_layer(event)
+                    break
         self._viewer.layers.events.inserted.connect(self.update_image_layer)
 
         @self._viewer.mouse_drag_callbacks.append
@@ -390,9 +401,9 @@ class Cropper_Widget(QtWidgets.QWidget):
             origin = idx if layer.name == "Shapes" else origin
         self._viewer.layers.move(origin, -1)
         path = Path(os.path.abspath(self._images.source.path))
-        try:
+        if (path.parents[0] / "db.yaml").is_file():
             self.folder_dict = benedict(path.parents[0] / "db.yaml")
-        except (OSError, ValueError) as e:
+        else:
             prepare_yaml.prepare_all_folder(path.parents[0])
             self.folder_dict = benedict(path.parents[0] / "db.yaml")
 
@@ -469,10 +480,14 @@ class Cropper_Widget(QtWidgets.QWidget):
     def crop(self):
         """Crop chosen layer to the rectangle and open a new viewer with the editor widget loaded."""
         images = []
+        settings = []
         for layer in self._viewer.layers:
             if isinstance(layer, napari.layers.Image):
                 cropped_images, box = self.crop_layer(layer)
                 images.append(cropped_images)
+                settings.append({"blending": layer.blending,
+                                "colormap": layer.colormap,
+                                "name": layer.name})
 
         class Event():
             first_frame: int = 0
@@ -491,9 +506,13 @@ class Cropper_Widget(QtWidgets.QWidget):
         event.event_dict = event_dict
 
         viewer = napari.Viewer()
-        for image in images:
-            viewer.add_image(image)
-        editor = Editor_Widget(viewer)
+        for image, setting in zip(images, settings):
+            viewer.add_image(image, **setting)
+        editor = Editor_Widget(viewer, init_data = False)
+        viewer.layers[-1].name = "NN Images"
+        editor.eda_layer = viewer.layers[-1]
+        editor.init_data()
+        editor.eda_ready = True
         editor.event = event
         viewer.window.add_dock_widget(editor, area='right')
         viewer.dims.set_point(0,0)
