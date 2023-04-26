@@ -296,7 +296,7 @@ class Editor_Widget(QtWidgets.QWidget):
             offset = [x - y for x, y in zip(data_coordinates[1:], pixel_coords[1:])]
             # print("PIXEL COORDS", pixel_coords)
             int_val = self.eda_layer.data[pixel_coords[0],pixel_coords[1],pixel_coords[2]]
-            if  int_val < 0.1:
+            if  int_val < 0.05:
                 # Add Gaussian
                 xmax= int(np.ceil(pixel_coords[2]+(size/2)))
                 xmin= int(np.floor(pixel_coords[2]-(size/2)))
@@ -532,6 +532,7 @@ def flood_fill(img, seed):
     """ Special flood fill to accept all values down to a specific value """
     height, width = img.shape
     filled = np.zeros((height, width), dtype=bool)
+    start_int = np.abs(img[seed[0], seed[1]])
     q = Queue()
     q.put(seed)
 
@@ -541,7 +542,7 @@ def flood_fill(img, seed):
         if filled[x, y]:
             continue
 
-        if np.abs(img[x, y]) == 0:
+        if np.abs(img[x, y]) < start_int*0.01:
             continue
 
         img[x, y] = 0
