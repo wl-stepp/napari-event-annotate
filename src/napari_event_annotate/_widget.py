@@ -274,7 +274,6 @@ class Editor_Widget(QtWidgets.QWidget):
     ##### UNDO BUTTON #####
     def undo(self):
         frame_num = self._viewer.dims.current_step[0]
-        print(frame_num)
         if self.undo_score != 0:
             self.undo_score = self.undo_score - 1
             self.eda_layer.data[frame_num] = self.undo_arr[self.undo_score]
@@ -488,7 +487,9 @@ class Cropper_Widget(QtWidgets.QWidget):
                 images.append(cropped_images)
                 settings.append({"blending": layer.blending,
                                 "colormap": layer.colormap,
-                                "name": layer.name})
+                                "name": layer.name,
+                                "contrast_limits": layer.contrast_limits,
+                                "contrast_limits_range": layer.contrast_limits_range,})
 
         class Event():
             first_frame: int = 0
