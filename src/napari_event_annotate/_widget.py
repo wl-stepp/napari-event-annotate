@@ -59,6 +59,7 @@ class Editor_Widget(QtWidgets.QWidget):
         self.layout().addLayout(self.choose_eda_line)
         self.layout().addLayout(self.size_grid)
         self.layout().addLayout(self.top_btn_layout)
+        self.layout().addLayout(self.clear_btn_layout)
         self.layout().addWidget(self.event_list)
         self.layout().addLayout(self.bottom_btn_layout)
 
@@ -136,11 +137,18 @@ class Editor_Widget(QtWidgets.QWidget):
     def create_top_buttons(self):
         self.edit_btn = QtWidgets.QPushButton('Edit')
         self.undo_btn = QtWidgets.QPushButton('Undo')
+        self.clear_btn = QtWidgets.QPushButton('Clear')
+        self.clear_all_btn = QtWidgets.QPushButton('Clear All')
         self.edit_btn.setStyleSheet(""" background-color: "None"; """)
         self.undo_btn.setStyleSheet(""" QPushButton {background-color: "None";} QPushButton:pressed { background-color: "darkGray";} """)
         self.top_btn_layout = QtWidgets.QHBoxLayout()
         self.top_btn_layout.addWidget(self.edit_btn)
         self.top_btn_layout.addWidget(self.undo_btn)
+        self.clear_btn_layout = QtWidgets.QHBoxLayout()
+        self.clear_btn_layout.addWidget(self.clear_btn)
+        self.clear_btn_layout.addWidget(self.clear_all_btn)
+        self.clear_btn.clicked.connect(self.clear_frame)
+        self.clear_all_btn.clicked.connect(self.clear_all)
         self.edit_btn.clicked.connect(self.on_off)
         self.undo_btn.clicked.connect(self.undo)
 
@@ -237,7 +245,16 @@ class Editor_Widget(QtWidgets.QWidget):
             tifffile.imwrite(Path(event_dict['event_path']) / "images.tif",
                              layer.data.astype(np.float16), photometric='minisblack')
 
+    def clear_frame(self, event, frame_num=None):
+        # Set the current frame to all zeros
+        if frame_num is None:
+            frame_num = self._viewer.dims.current_step[0]
+        new_data = self.eda_layer.data
+        new_data[frame_num] = np.zeros_like(new_data[frame_num])
+        self.eda_layer.data = new_data
 
+    def clear_all(self):
+        self.eda_layer.data = np.zeros_like(self.eda_layer.data)
 
     def get_gaussian(self, sigma, sz, offset):
         size = (sz+1, sz+1)
