@@ -271,9 +271,10 @@ class Editor_Widget(QtWidgets.QWidget):
         new_data = self.eda_layer.data
         return new_data
 
-        ##### UNDO BUTTON #####
+    ##### UNDO BUTTON #####
     def undo(self):
-        frame_num = int(getattr(self.eda_layer, 'position')[0])
+        frame_num = self._viewer.dims.current_step[0]
+        print(frame_num)
         if self.undo_score != 0:
             self.undo_score = self.undo_score - 1
             self.eda_layer.data[frame_num] = self.undo_arr[self.undo_score]
