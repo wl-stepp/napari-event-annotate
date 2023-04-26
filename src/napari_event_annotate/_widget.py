@@ -488,8 +488,7 @@ class Cropper_Widget(QtWidgets.QWidget):
                 settings.append({"blending": layer.blending,
                                 "colormap": layer.colormap,
                                 "name": layer.name,
-                                "contrast_limits": layer.contrast_limits,
-                                "contrast_limits_range": layer.contrast_limits_range,})
+                                "contrast_limits": layer.contrast_limits,})
 
         class Event():
             first_frame: int = 0
