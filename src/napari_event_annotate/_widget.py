@@ -313,13 +313,14 @@ class Editor_Widget(QtWidgets.QWidget):
             offset = [x - y for x, y in zip(data_coordinates[1:], pixel_coords[1:])]
             # print("PIXEL COORDS", pixel_coords)
             int_val = self.eda_layer.data[pixel_coords[0],pixel_coords[1],pixel_coords[2]]
+            # print(int_val)
             if  int_val < 0.05:
                 # Add Gaussian
                 xmax= int(np.ceil(pixel_coords[2]+(size/2)))
                 xmin= int(np.floor(pixel_coords[2]-(size/2)))
                 ymax= int(np.ceil(pixel_coords[1]+(size/2)))
                 ymin= int(np.floor(pixel_coords[1]-(size/2)))
-                self.eda_layer.data[frame_num, ymin:ymax, xmin:xmax] = self.eda_layer.data[frame_num, ymin:ymax, xmin:xmax] + self.add_gauss(size, offset)
+                self.eda_layer.data[frame_num, ymin:ymax, xmin:xmax] = self.eda_layer.data[frame_num, ymin:ymax, xmin:xmax] + self.add_gauss(size, offset)*max([1,self.eda_layer.data.max()])
                 self.undo_score=self.undo_score+1
                 if self.undo_score==10:
                     for i in range(1,10):
@@ -557,7 +558,7 @@ class Batch_Loader_Widget(QtWidgets.QWidget):
 
         self.tif_list = None
         self.folder = None
-        self.index = 0
+        self.index = -1
 
         self.new_folder(self.folder_input.text())
 
@@ -579,6 +580,7 @@ class Batch_Loader_Widget(QtWidgets.QWidget):
         self.original_folder.clicked.connect(self.load_original_data)
 
     def load_next(self):
+        self.index += 1
         try:
             self._viewer.layers.remove('images')
             self._viewer.layers.remove('ground_truth')
@@ -592,7 +594,6 @@ class Batch_Loader_Widget(QtWidgets.QWidget):
         self.event_folder.setText(self.tif_list[self.index].parents[0].parts[-1])
         event_dict = benedict(self.tif_list[self.index].parents[0] / "event_db.yaml")
         self.original_folder.setText(f"{Path(event_dict['original_path']).parts[-1]}\n{event_dict['original_file']}")
-        self.index += 1
 
     def new_folder(self, new_folder):
         self.index = 0
@@ -604,13 +605,26 @@ class Batch_Loader_Widget(QtWidgets.QWidget):
         event_dict = benedict(self.tif_list[self.index].parents[0] / "event_db.yaml")
         images = tifffile.imread(Path(event_dict['original_path']) / event_dict['original_file'])
         new_viewer.add_image(images, colormap="gray")
+
         try:
-            new_viewer.open(Path(event_dict['original_path']) / "ground_truth.tif",
-                            plugin='builtins', blending='additive', colormap='red')
+            ground_truth = tifffile.imread(Path(event_dict['original_path']) / "ground_truth.tif")
         except FileNotFoundError:
-            new_viewer.open(Path(event_dict['original_path']) / "ground_truth.tiff",
-                            plugin='builtins', blending='additive', colormap='red')
-        print('done')
+            ground_truth = tifffile.imread(Path(event_dict['original_path']) / "ground_truth.tiff")
+        new_viewer.add_image(ground_truth, colormap="red", blending='additive')
+        new_viewer.layers['ground_truth'].name = "NN Images"
+        new_viewer.dims.set_point(0, event_dict['frames'][0] + 1)
+        box = [[event_dict["crop_box"][1], event_dict["crop_box"][0]],
+               [event_dict["crop_box"][1], event_dict["crop_box"][2]],
+               [event_dict["crop_box"][3], event_dict["crop_box"][2]],
+               [event_dict["crop_box"][3], event_dict["crop_box"][0]]]
+        new_viewer.add_shapes(box, shape_type='rectangle', edge_width=2, edge_color='blue',
+                              face_color='transparent')
+        editor = Editor_Widget(new_viewer, init_data = False)
+        editor.eda_layer = new_viewer.layers["NN Images"]
+        editor.init_data()
+        editor.eda_ready = True
+        new_viewer.window.add_dock_widget(editor, area='right')
+
 
 def flood_fill(img, seed):
     """ Special flood fill to accept all values down to a specific value """
