@@ -610,7 +610,7 @@ class Batch_Loader_Widget(QtWidgets.QWidget):
             ground_truth = tifffile.imread(Path(event_dict['original_path']) / "ground_truth.tif")
         except FileNotFoundError:
             ground_truth = tifffile.imread(Path(event_dict['original_path']) / "ground_truth.tiff")
-        new_viewer.add_image(ground_truth, colormap="red", blending='additive')
+        new_viewer.add_image(ground_truth, colormap="red", blending='additive', name="ground_truth")
         new_viewer.layers['ground_truth'].name = "NN Images"
         new_viewer.dims.set_point(0, event_dict['frames'][0] + 1)
         box = [[event_dict["crop_box"][1], event_dict["crop_box"][0]],
