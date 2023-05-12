@@ -546,6 +546,72 @@ class Cropper_Widget(QtWidgets.QWidget):
         return cropped_images, box
 
 
+class Batch_Loader_Widget(QtWidgets.QWidget):
+
+    def __init__(self, napari_viewer: napari.Viewer):
+        super().__init__()
+
+        self._viewer: napari.Viewer = napari_viewer
+        self.setLayout(QtWidgets.QVBoxLayout())
+        self.make_gui()
+
+        self.tif_list = None
+        self.folder = None
+        self.index = 0
+
+        self.new_folder(self.folder_input.text())
+
+    def make_gui(self):
+        """Add a inpout box for integers to define the size of the crop and two buttons. One button
+        to start the editting, the other one to do the crop."""
+        self.folder_input = QtWidgets.QLineEdit("//lebsrv2.epfl.ch/LEB_SHARED/SHARED/_Lab members/Juan/230222_MitoSplitNet_TrainingSet_U2OS_iSIM/event_data")
+        self.next_button = QtWidgets.QPushButton("Next")
+        self.event_folder = QtWidgets.QLineEdit("None")
+        self.original_folder = QtWidgets.QPushButton("None")
+
+        self.layout().addWidget(self.folder_input)
+        self.layout().addWidget(self.next_button)
+        self.layout().addWidget(self.event_folder)
+        self.layout().addWidget(self.original_folder)
+        #Connect functions
+        self.next_button.clicked.connect(self.load_next)
+        self.folder_input.editingFinished.connect(self.new_folder)
+        self.original_folder.clicked.connect(self.load_original_data)
+
+    def load_next(self):
+        try:
+            self._viewer.layers.remove('images')
+            self._viewer.layers.remove('ground_truth')
+        except ValueError:
+            pass
+
+        self._viewer.open(self.tif_list[self.index])
+        self._viewer.open(self.tif_list[self.index].parents[0] / "ground_truth.tif")
+        self._viewer.layers['ground_truth'].colormap = 'red'
+        self._viewer.layers['ground_truth'].blending = 'additive'
+        self.event_folder.setText(self.tif_list[self.index].parents[0].parts[-1])
+        event_dict = benedict(self.tif_list[self.index].parents[0] / "event_db.yaml")
+        self.original_folder.setText(f"{Path(event_dict['original_path']).parts[-1]}\n{event_dict['original_file']}")
+        self.index += 1
+
+    def new_folder(self, new_folder):
+        self.index = 0
+        self.folder = Path(new_folder)
+        self.tif_list = list(Path(new_folder).rglob("*images.tif"))
+
+    def load_original_data(self):
+        new_viewer = napari.Viewer()
+        event_dict = benedict(self.tif_list[self.index].parents[0] / "event_db.yaml")
+        images = tifffile.imread(Path(event_dict['original_path']) / event_dict['original_file'])
+        new_viewer.add_image(images, colormap="gray")
+        try:
+            new_viewer.open(Path(event_dict['original_path']) / "ground_truth.tif",
+                            plugin='builtins', blending='additive', colormap='red')
+        except FileNotFoundError:
+            new_viewer.open(Path(event_dict['original_path']) / "ground_truth.tiff",
+                            plugin='builtins', blending='additive', colormap='red')
+        print('done')
+
 def flood_fill(img, seed):
     """ Special flood fill to accept all values down to a specific value """
     height, width = img.shape

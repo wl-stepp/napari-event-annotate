@@ -8,6 +8,9 @@ contributions:
     - id: napari-event-annotate.Cropper_Widget
       python_name: napari_event_annotate._widget:Cropper_Widget
       title: Cropper Widget
+    - id: napari-event-annotate.Batch_Loader_Widget
+      python_name: napari_event_annotate._widget:Batch_Loader_Widget
+      title: Batch Loader
   sample_data:
     - command: napari-event-annotate.make_sample_data
       display_name: Event Annotate
@@ -17,3 +20,5 @@ contributions:
       display_name: Editor
     - command: napari-event-annotate.Cropper_Widget
       display_name: Cropper
+    - command: napari-event-annotate.Batch_Loader_Widget
+      display_name: Batch Loader
