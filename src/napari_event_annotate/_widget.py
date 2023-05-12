@@ -604,7 +604,7 @@ class Batch_Loader_Widget(QtWidgets.QWidget):
         new_viewer = napari.Viewer()
         event_dict = benedict(self.tif_list[self.index].parents[0] / "event_db.yaml")
         images = tifffile.imread(Path(event_dict['original_path']) / event_dict['original_file'])
-        new_viewer.add_image(images, colormap="gray")
+        new_viewer.add_image(images, colormap="gray", name='images')
 
         try:
             ground_truth = tifffile.imread(Path(event_dict['original_path']) / "ground_truth.tif")
