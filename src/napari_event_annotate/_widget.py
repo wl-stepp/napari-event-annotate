@@ -514,6 +514,7 @@ class Cropper_Widget(QtWidgets.QWidget):
 
         event_dict = copy.deepcopy(self.folder_dict)
         event_dict['type'] = "event"
+        event_dict['annotation_type'] = "manual"
         # event_dict['channel_contrast'] = channel_contrast
         # if channel_contrast is not None:
         #     event_dict['contrast'] = channel_contrast
