@@ -560,7 +560,7 @@ class Batch_Loader_Widget(QtWidgets.QWidget):
         self.folder = None
         self.index = -1
 
-        self.new_folder(self.folder_input.text())
+        self.new_folder()
 
     def make_gui(self):
         """Add a inpout box for integers to define the size of the crop and two buttons. One button
@@ -595,10 +595,10 @@ class Batch_Loader_Widget(QtWidgets.QWidget):
         event_dict = benedict(self.tif_list[self.index].parents[0] / "event_db.yaml")
         self.original_folder.setText(f"{Path(event_dict['original_path']).parts[-1]}\n{event_dict['original_file']}")
 
-    def new_folder(self, new_folder):
+    def new_folder(self):
         self.index = 0
-        self.folder = Path(new_folder)
-        self.tif_list = list(Path(new_folder).rglob("*images.tif"))
+        self.folder = Path(self.folder_input.text())
+        self.tif_list = list(Path(self.folder_input.text()).rglob("*images.tif"))
 
     def load_original_data(self):
         new_viewer = napari.Viewer()
