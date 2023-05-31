@@ -235,6 +235,12 @@ class Editor_Widget(QtWidgets.QWidget):
         event_dict = self.event.event_dict
         event_dict['label_file'] = os.path.basename("ground_truth.tif")
         event_dict['event_content'] = self.event_type.currentText().lower()
+        if isinstance(event_dict['contrast'], dict):
+            for key, value in event_dict['contrast'].items():
+                for layer in self._viewer.layers:
+                    if value in layer.name:
+                        event_dict['contrast'] = key
+                        break
         handle_db(self.event, self.event.box, event_dict, self.save_folder.text())
         tifffile.imwrite(Path(event_dict['event_path']) / "ground_truth.tif",
                             self._viewer.layers["NN Images"].data.astype(np.float16),
