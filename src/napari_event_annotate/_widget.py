@@ -232,6 +232,7 @@ class Editor_Widget(QtWidgets.QWidget):
             tifffile.imwrite(savepath, (data).astype(np.uint64), photometric='minisblack')
 
     def save_event_clb(self):
+        self.save_event.setStyleSheet("background-color: orange")
         event_dict = self.event.event_dict
         event_dict['label_file'] = os.path.basename("ground_truth.tif")
         event_dict['event_content'] = self.event_type.currentText().lower()
@@ -250,6 +251,7 @@ class Editor_Widget(QtWidgets.QWidget):
                 continue
             tifffile.imwrite(Path(event_dict['event_path']) / "images.tif",
                              layer.data.astype(np.float16), photometric='minisblack')
+        self.save_event.setStyleSheet("background-color: green")
 
     def clear_frame(self, event, frame_num=None):
         # Set the current frame to all zeros
