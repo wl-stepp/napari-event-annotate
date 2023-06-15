@@ -232,7 +232,7 @@ class Editor_Widget(QtWidgets.QWidget):
             tifffile.imwrite(savepath, (data).astype(np.uint64), photometric='minisblack')
 
     def save_event_clb(self):
-        self.save_event.setStyleSheet("background-color: orange")
+        self.save_event.setStyleSheet("background-color: orange; border:none;")
         event_dict = self.event.event_dict
         event_dict['label_file'] = os.path.basename("ground_truth.tif")
         event_dict['event_content'] = self.event_type.currentText().lower()
@@ -251,7 +251,8 @@ class Editor_Widget(QtWidgets.QWidget):
                 continue
             tifffile.imwrite(Path(event_dict['event_path']) / "images.tif",
                              layer.data.astype(np.float16), photometric='minisblack')
-        self.save_event.setStyleSheet("background-color: green")
+        self.save_event.setStyleSheet("background-color: green; border: none;")
+
 
     def clear_frame(self, event, frame_num=None):
         # Set the current frame to all zeros
@@ -480,6 +481,9 @@ class Cropper_Widget(QtWidgets.QWidget):
     def remove_additional_rectangles(self, event):
         start_frame = int(self._shape_layer.data[0][0][0])
         self._shape_layer.data = self._shape_layer.data[:int(event.position[0]) - start_frame + 1]
+        green_colors = np.vstack([[0, 1, 0, 1]]*self._shape_layer.edge_color.shape[0])
+        self._shape_layer.edge_color= green_colors
+
 
     def add_rectangles(self, event):
         crop_size = int(self.crop_size.text())
