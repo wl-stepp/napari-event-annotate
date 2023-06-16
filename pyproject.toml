@@ -1,5 +1,5 @@
 [build-system]
-requires = ["setuptools>=42.0.0", "wheel", "pymongo", "deep_events@git+https://github.com/LEB-EPFL/deep-events"]
+requires = ["setuptools>=42.0.0", "wheel", "pymongo"]
 build-backend = "setuptools.build_meta"
 
 
