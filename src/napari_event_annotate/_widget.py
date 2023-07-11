@@ -12,7 +12,7 @@ from scipy.stats import multivariate_normal
 import time
 import napari
 import os
-from deep_events.database import prepare_yaml
+from deep_events.database import prepare_yaml, get_collection
 from deep_events.gaussians_to_training import handle_db
 from pathlib import Path
 from benedict import benedict
@@ -391,6 +391,7 @@ class Cropper_Widget(QtWidgets.QWidget):
         self.folder_dict = None
         self._images = None
         self._shape_layer = self._viewer.add_shapes()
+        self._done_layer = self._viewer.add_shapes()
         self.setLayout(QtWidgets.QVBoxLayout())
         self.make_gui()
 
@@ -419,6 +420,8 @@ class Cropper_Widget(QtWidgets.QWidget):
 
     def update_image_layer(self, event):
         "Update self._images with the new layer, if the layer is an image."
+        # Delete Done information
+        self._done_layer.data = []
         if not isinstance(event.value, napari.layers.Image):
             return
         self._images = event.value
@@ -434,6 +437,8 @@ class Cropper_Widget(QtWidgets.QWidget):
             prepare_yaml.prepare_all_folder(path.parents[0])
             self.folder_dict = benedict(path.parents[0] / "db.yaml")
 
+
+
     def make_gui(self):
         """Add a inpout box for integers to define the size of the crop and two buttons. One button
         to start the editting, the other one to do the crop."""
@@ -443,13 +448,17 @@ class Cropper_Widget(QtWidgets.QWidget):
         self.start_edit = QtWidgets.QPushButton("Edit")
         self.start_edit.setCheckable(True)
         self.do_crop = QtWidgets.QPushButton("Crop")
+        self.label_fov = QtWidgets.QPushButton("Label FOV")
+
         self.layout().addWidget(self.crop_size_label)
         self.layout().addWidget(self.crop_size)
         self.layout().addWidget(self.start_edit)
         self.layout().addWidget(self.do_crop)
+        self.layout().addWidget(self.label_fov)
         #Connect functions
         self.start_edit.clicked.connect(self.start_editting)
         self.do_crop.clicked.connect(self.crop)
+        self.label_fov.clicked.connect(self.label_fov_clb)
 
     def start_editting(self, event):
         self.editting = event
@@ -483,7 +492,6 @@ class Cropper_Widget(QtWidgets.QWidget):
         self._shape_layer.data = self._shape_layer.data[:int(event.position[0]) - start_frame + 1]
         green_colors = np.vstack([[0, 1, 0, 1]]*self._shape_layer.edge_color.shape[0])
         self._shape_layer.edge_color= green_colors
-
 
     def add_rectangles(self, event):
         crop_size = int(self.crop_size.text())
@@ -559,12 +567,20 @@ class Cropper_Widget(QtWidgets.QWidget):
                                     box[0]:box[2]]
         return cropped_images, box
 
+    def label_fov_clb(self):
+        rect = self._viewer.window.qt_viewer.view.camera.get_state()['rect']
+        rectangle = [[rect.top, rect.left],
+                     [rect.top, rect.right],
+                     [rect.bottom, rect.right],
+                     [rect.bottom, rect.left]]
+        self._done_layer.add([rectangle],shape_type='polygon', edge_color = 'none', face_color=[0, 0.5, 0, 0.3])
+
 
 class Batch_Loader_Widget(QtWidgets.QWidget):
 
     def __init__(self, napari_viewer: napari.Viewer):
         super().__init__()
-
+        self.settings = QtCore.QSettings("Event-Annotate", self.__class__.__name__)
         self._viewer: napari.Viewer = napari_viewer
         self.setLayout(QtWidgets.QVBoxLayout())
         self.make_gui()
@@ -578,18 +594,21 @@ class Batch_Loader_Widget(QtWidgets.QWidget):
     def make_gui(self):
         """Add a inpout box for integers to define the size of the crop and two buttons. One button
         to start the editting, the other one to do the crop."""
-        self.folder_input = QtWidgets.QLineEdit("//lebsrv2.epfl.ch/LEB_SHARED/SHARED/_Lab members/Juan/230222_MitoSplitNet_TrainingSet_U2OS_iSIM/event_data")
+        self.folder_input = QtWidgets.QLineEdit(self.settings.value("folder", ""))
+        self.prompt_input = QtWidgets.QLineEdit(self.settings.value("prompt", "{}"))
         self.next_button = QtWidgets.QPushButton("Next")
         self.event_folder = QtWidgets.QLineEdit("None")
         self.original_folder = QtWidgets.QPushButton("None")
 
         self.layout().addWidget(self.folder_input)
+        self.layout().addWidget(self.prompt_input)
         self.layout().addWidget(self.next_button)
         self.layout().addWidget(self.event_folder)
         self.layout().addWidget(self.original_folder)
         #Connect functions
         self.next_button.clicked.connect(self.load_next)
         self.folder_input.editingFinished.connect(self.new_folder)
+        self.prompt_input.editingFinished.connect(self.new_folder)
         self.original_folder.clicked.connect(self.load_original_data)
 
     def load_next(self):
@@ -600,9 +619,9 @@ class Batch_Loader_Widget(QtWidgets.QWidget):
         except ValueError:
             pass
 
-        self._viewer.open(self.tif_list[self.index])
+        self._viewer.open(self.tif_list[self.index].as_posix())
         self._viewer.open(self.tif_list[self.index].parents[0] / "ground_truth.tif")
-        self._viewer.layers['ground_truth'].colormap = 'red'
+        self._viewer.layers['ground_truth'].colormap = 'inferno'
         self._viewer.layers['ground_truth'].blending = 'additive'
         self.event_folder.setText(self.tif_list[self.index].parents[0].parts[-1])
         event_dict = benedict(self.tif_list[self.index].parents[0] / "event_db.yaml")
@@ -611,7 +630,22 @@ class Batch_Loader_Widget(QtWidgets.QWidget):
     def new_folder(self):
         self.index = 0
         self.folder = Path(self.folder_input.text())
-        self.tif_list = list(Path(self.folder_input.text()).rglob("*images.tif"))
+        self.prompt = benedict(self.prompt_input.text())
+        # self.db_list = list(Path(self.folder_input.text()).rglob("*event_db.yaml"))
+        self.collection = benedict(Path(self.folder_input.text())/'collection.yaml')['collection']
+        collection = get_collection(self.collection)
+        events = list(collection.find(self.prompt))
+        self.tif_list = [Path(event['event_path']) / "images.tif" for event in events]
+        # mismatch = False
+        # for db in self.db_list:
+        #     event_dict = benedict(db)
+        #     for key in self.prompt.keys():
+        #         if self.prompt[key] != event_dict[key]:
+        #             mismatch = True
+        #     if not mismatch:
+        #         self.tif_list.append(db.parent / "images.tif")
+
+
 
     def load_original_data(self):
         new_viewer = napari.Viewer()
@@ -637,6 +671,11 @@ class Batch_Loader_Widget(QtWidgets.QWidget):
         editor.init_data()
         editor.eda_ready = True
         new_viewer.window.add_dock_widget(editor, area='right')
+
+    def hideEvent(self, event):
+        self.settings.setValue("folder", self.folder_input.text())
+        self.settings.setValue("prompt", self.prompt_input.text())
+        super().hideEvent(event)
 
 
 def flood_fill(img, seed):
