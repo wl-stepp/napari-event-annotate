@@ -579,7 +579,8 @@ class Cropper_Widget(QtWidgets.QWidget):
                      [rect.top, rect.right],
                      [rect.bottom, rect.right],
                      [rect.bottom, rect.left]]
-        self._done_layer.add([rectangle],shape_type='polygon', edge_color = 'none', face_color=[0, 0.5, 0, 0.3])
+        self._done_layer.add([rectangle],shape_type='polygon', edge_color = None,
+                             face_color=[0, 0.5, 0, 0.3])
 
 
 class Batch_Loader_Widget(QtWidgets.QWidget):
