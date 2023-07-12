@@ -488,10 +488,16 @@ class Cropper_Widget(QtWidgets.QWidget):
         self._shape_layer.refresh()
 
     def remove_additional_rectangles(self, event):
-        start_frame = int(self._shape_layer.data[0][0][0])
+        try:
+            start_frame = int(self._shape_layer.data[0][0][0])
+        except IndexError:
+            self.started = False
+            self.mouse_press(event)
+            return
         self._shape_layer.data = self._shape_layer.data[:int(event.position[0]) - start_frame + 1]
         green_colors = np.vstack([[0, 1, 0, 1]]*self._shape_layer.edge_color.shape[0])
         self._shape_layer.edge_color= green_colors
+
 
     def add_rectangles(self, event):
         crop_size = int(self.crop_size.text())
