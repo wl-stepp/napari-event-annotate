@@ -430,7 +430,7 @@ class Cropper_Widget(QtWidgets.QWidget):
         done_layer = 0
         for idx, layer in enumerate(self._viewer.layers):
             origin = idx if layer.name == "Shapes" else origin
-            done_layer = idx if layer.name == "Shapes_1" else done_layer
+            done_layer = idx if layer.name == "Shapes [1]" else done_layer
         self._viewer.layers.move(done_layer, -1)
         self._viewer.layers.move(origin, -1)
 
