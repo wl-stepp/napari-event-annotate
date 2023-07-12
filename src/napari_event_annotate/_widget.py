@@ -494,7 +494,7 @@ class Cropper_Widget(QtWidgets.QWidget):
             self.started = False
             self.mouse_press(event)
             return
-        self._shape_layer.data = self._shape_layer.data[:int(event.position[0]) - start_frame + 1]
+        self._shape_layer.data = self._shape_layer.data[:int(event.position[0]) - start_frame + 2]
         green_colors = np.vstack([[0, 1, 0, 1]]*self._shape_layer.edge_color.shape[0])
         self._shape_layer.edge_color= green_colors
 
