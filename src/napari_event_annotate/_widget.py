@@ -427,9 +427,13 @@ class Cropper_Widget(QtWidgets.QWidget):
         self._images = event.value
         self._images.scale = (1,1,1)
         origin = 0
+        done_layer = 0
         for idx, layer in enumerate(self._viewer.layers):
             origin = idx if layer.name == "Shapes" else origin
+            done_layer = idx if layer.name == "Shapes_1" else done_layer
+        self._viewer.layers.move(done_layer, -1)
         self._viewer.layers.move(origin, -1)
+
         path = Path(os.path.abspath(self._images.source.path))
         if (path.parents[0] / "db.yaml").is_file():
             self.folder_dict = benedict(path.parents[0] / "db.yaml")
